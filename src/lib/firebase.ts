@@ -3,13 +3,13 @@ import { getAuth, browserLocalPersistence, setPersistence } from "firebase/auth"
 import { Firestore, getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDInBeT_ytLjhkRv_J3rtagRXUdY4WfEds",
-  authDomain: "ibellmobiles-123.firebaseapp.com",
-  projectId: "ibellmobiles-123",
-  storageBucket: "ibellmobiles-123.firebasestorage.app",
-  messagingSenderId: "191077483403",
-  appId: "1:191077483403:web:1c934544f5b7e3cbc0658e",
-  measurementId: "G-3WSQ6FXD71",
+  apiKey: "AIzaSyDI2um6Fz-tsEujPnbVWkFLaLjaMu_5A-w",
+  authDomain: "billing-93db6.firebaseapp.com",
+  projectId: "billing-93db6",
+  storageBucket: "billing-93db6.firebasestorage.app",
+  messagingSenderId: "556281193168",
+  appId: "1:556281193168:web:264289f8c14c31ecce74d5",
+  measurementId: "G-5X4VB6B969"
 };
 
 export const app = initializeApp(firebaseConfig);
@@ -19,11 +19,11 @@ let _db: Firestore;
 try {
   _db = initializeFirestore(app, {
     localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-  }, "teligramboat");
+  }, "billbook");
 } catch {
-  _db = getFirestore(app, "teligramboat");
+  _db = getFirestore(app, "billbook");
 }
 export const db: Firestore = _db;
 
 export const auth = getAuth(app);
-setPersistence(auth, browserLocalPersistence).catch(() => {});
+setPersistence(auth, browserLocalPersistence).catch(() => { });
