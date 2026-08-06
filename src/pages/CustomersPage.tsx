@@ -33,21 +33,28 @@ function CustomerSkeleton() {
   );
 }
 
+// Session-scoped cache so returning to the customer list shows last-known data instantly
+// instead of flashing the loading skeleton, while Firestore refreshes it in the background.
+type CustomersCacheEntry = { customers: Customer[]; balances: Record<string, number> };
+const customersCache = new Map<string, CustomersCacheEntry>();
+const getCustomersCache = (uid: string): CustomersCacheEntry | undefined => customersCache.get(uid);
+
 export default function CustomersPage() {
   const { user } = useAuth();
   const nav = useNavigate();
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [balances, setBalances] = useState<Record<string, number>>({});
+  const [customers, setCustomers] = useState<Customer[]>(() => (user ? getCustomersCache(user.uid)?.customers ?? [] : []));
+  const [balances, setBalances] = useState<Record<string, number>>(() => (user ? getCustomersCache(user.uid)?.balances ?? {} : {}));
   const [q, setQ] = useState("");
   const [openAdd, setOpenAdd] = useState(false);
   // loading stays true until BOTH customers and balances are ready — no partial renders
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !(user && getCustomersCache(user.uid)));
 
   // Step 1: subscribe to customer list (just updates state, doesn't clear loading)
   useEffect(() => {
     if (!user) return;
     return subscribeCustomers(user.uid, (rows) => {
       setCustomers(rows);
+      customersCache.set(user.uid, { customers: rows, balances: getCustomersCache(user.uid)?.balances ?? {} });
     });
   }, [user]);
 
@@ -58,10 +65,11 @@ export default function CustomersPage() {
     if (customers.length === 0) {
       setBalances({});
       setLoading(false);
+      customersCache.set(user.uid, { customers, balances: {} });
       return;
     }
     let cancelled = false;
-    setLoading(true);
+    if (!getCustomersCache(user.uid)) setLoading(true);
     (async () => {
       const bals: Record<string, number> = {};
       await Promise.all(
@@ -78,6 +86,7 @@ export default function CustomersPage() {
       if (!cancelled) {
         setBalances(bals);
         setLoading(false);
+        customersCache.set(user.uid, { customers, balances: bals });
       }
     })();
     return () => { cancelled = true; };

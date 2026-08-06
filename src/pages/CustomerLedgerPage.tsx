@@ -26,6 +26,13 @@ import { buildLedgerPdf, shareOrDownloadPdf } from "@/lib/pdf";
 import ShareIcon from "@mui/icons-material/Share";
 import DownloadIcon from "@mui/icons-material/Download";
 
+// Session-scoped cache so revisiting a customer shows last-known data instantly
+// instead of flashing the loading skeleton, while Firestore refreshes in the background.
+type LedgerCacheEntry = { customer: Customer | null; txns: Transaction[] };
+const ledgerCache = new Map<string, LedgerCacheEntry>();
+const getCacheEntry = (customerId: string): LedgerCacheEntry =>
+  ledgerCache.get(customerId) ?? { customer: null, txns: [] };
+
 export default function CustomerLedgerPage() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -33,9 +40,9 @@ export default function CustomerLedgerPage() {
   const { enqueueSnackbar } = useSnackbar();
   const photoRef = useRef<HTMLInputElement>(null);
 
-  const [customer, setCustomer] = useState<Customer | null>(null);
-  const [txns, setTxns] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [customer, setCustomer] = useState<Customer | null>(() => (id ? getCacheEntry(id).customer : null));
+  const [txns, setTxns] = useState<Transaction[]>(() => (id ? getCacheEntry(id).txns : []));
+  const [loading, setLoading] = useState(() => !(id && ledgerCache.has(id)));
   const [txnType, setTxnType] = useState<"credit" | "payment" | null>(null);
   const [editTxn, setEditTxn] = useState<Transaction | null>(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -45,15 +52,25 @@ export default function CustomerLedgerPage() {
   useEffect(() => {
     if (!user || !id) return;
     return onSnapshot(customerDoc(user.uid, id), (snap) => {
-      if (snap.exists()) setCustomer({ id: snap.id, ...(snap.data() as any) });
-      else nav("/customers", { replace: true });
+      if (snap.exists()) {
+        const c = { id: snap.id, ...(snap.data() as any) } as Customer;
+        setCustomer(c);
+        ledgerCache.set(id, { ...getCacheEntry(id), customer: c });
+      } else {
+        ledgerCache.delete(id);
+        nav("/customers", { replace: true });
+      }
     });
   }, [user, id, nav]);
 
   useEffect(() => {
     if (!user || !id) return;
-    setLoading(true);
-    return subscribeTransactions(user.uid, id, (rows) => { setTxns(rows); setLoading(false); });
+    if (!ledgerCache.has(id)) setLoading(true);
+    return subscribeTransactions(user.uid, id, (rows) => {
+      setTxns(rows);
+      setLoading(false);
+      ledgerCache.set(id, { ...getCacheEntry(id), txns: rows });
+    });
   }, [user, id]);
 
   const balance = useMemo(() => computeBalance(customer?.openingBalance || 0, txns), [customer, txns]);
@@ -75,6 +92,7 @@ export default function CustomerLedgerPage() {
     if (!confirm(`Delete ${customer?.name} and all their entries? This cannot be undone.`)) return;
     try {
       await deleteCustomer(user.uid, customer!.id);
+      ledgerCache.delete(customer!.id);
       enqueueSnackbar("Customer deleted", { variant: "success" });
       nav("/customers", { replace: true });
     } catch (e: any) { enqueueSnackbar(e?.message || "Delete failed", { variant: "error" }); }
