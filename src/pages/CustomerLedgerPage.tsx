@@ -61,7 +61,11 @@ export default function CustomerLedgerPage() {
   const totalPaid = txns.filter((t) => t.type === "payment").reduce((a, b) => a + b.amount, 0);
 
   const rows = useMemo(() => {
-    const ordered = [...txns].sort((a, b) => a.date.toMillis() - b.date.toMillis());
+    const ordered = [...txns].sort((a, b) => {
+      const dateDiff = a.date.toMillis() - b.date.toMillis();
+      if (dateDiff !== 0) return dateDiff;
+      return (a.createdAt?.toMillis() ?? 0) - (b.createdAt?.toMillis() ?? 0);
+    });
     let run = customer?.openingBalance || 0;
     return ordered.map((t) => { run += t.type === "credit" ? t.amount : -t.amount; return { ...t, running: run }; }).reverse();
   }, [txns, customer]);
